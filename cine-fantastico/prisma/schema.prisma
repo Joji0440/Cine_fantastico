@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 📋 TIPOS ENUM
+// ============================================
+
+enum TipoUsuarioEnum {
+  cliente
+  empleado
+  administrador
+  gerente
+
+  @@map("tipo_usuario_enum")
+}
+
+enum ClasificacionPeliculaEnum {
+  G
+  PG
+  PG_13 @map("PG-13")
+  R
+  NC_17 @map("NC-17")
+
+  @@map("clasificacion_pelicula_enum")
+}
+
+enum EstadoReservaEnum {
+  pendiente
+  confirmada
+  pagada
+  cancelada
+  usada
+  vencida
+
+  @@map("estado_reserva_enum")
+}
+
+enum MetodoPagoEnum {
+  efectivo
+  tarjeta_credito
+  tarjeta_debito
+  transferencia
+  paypal
+
+  @@map("metodo_pago_enum")
+}
+
+enum TipoSalaEnum {
+  standard
+  premium
+  threeDimensional @map("3d")
+  imax
+  vip
+
+  @@map("tipo_sala_enum")
+}
+
+enum PosicionEmpleadoEnum {
+  cajero
+  acomodador
+  proyeccionista
+  limpieza
+  gerente
+  administrador
+
+  @@map("posicion_empleado_enum")
+}
+
+// ============================================
+// 👥 TABLAS DE USUARIOS
+// ============================================
+
+model usuarios {
+  id                  String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email               String          @unique @db.VarChar(255)
+  password_hash       String          @db.VarChar(255)
+  nombre              String          @db.VarChar(100)
+  apellido            String          @db.VarChar(100)
+  telefono            String?         @db.VarChar(20)
+  fecha_nacimiento    DateTime?       @db.Date
+  tipo_usuario        TipoUsuarioEnum @default(cliente)
+  email_verificado    Boolean?        @default(false)
+  activo              Boolean?        @default(true)
+  fecha_creacion      DateTime?       @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?       @default(now()) @updatedAt @db.Timestamp(6)
+
+  // Relaciones
+  reservas reservas[]
+
+  @@map("usuarios")
+}
+
+model empleados_detalles {
+  id                 String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  usuario_id         String               @db.Uuid
+  numero_empleado    String               @unique @db.VarChar(20)
+  posicion           PosicionEmpleadoEnum @default(cajero)
+  salario            Decimal?             @db.Decimal(10, 2)
+  fecha_contratacion DateTime             @default(dbgenerated("CURRENT_DATE")) @db.Date
+  supervisor_id      String?              @db.Uuid
+  turno              String?              @default("mañana") @db.VarChar(20)
+  activo             Boolean?             @default(true)
+  fecha_creacion     DateTime?            @default(now()) @db.Timestamp(6)
+
+  @@map("empleados_detalles")
+}
+
+// ============================================
+// 🎬 MÓDULO DE PELÍCULAS
+// ============================================
+
+model paises {
+  id         String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  codigo_iso String      @unique @db.VarChar(3)
+  nombre     String      @unique @db.VarChar(100)
+  activo     Boolean?    @default(true)
+
+  // Relaciones
+  peliculas peliculas[]
+
+  @@map("paises")
+}
+
+model generos {
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre            String              @unique @db.VarChar(50)
+  descripcion       String?
+  color_hex         String?             @default("#6c757d") @db.VarChar(7)
+  activo            Boolean?            @default(true)
+  fecha_creacion    DateTime?           @default(now()) @db.Timestamp(6)
+
+  // Relaciones
+  peliculas_generos peliculas_generos[]
+
+  @@map("generos")
+}
+
+model peliculas {
+  id                    String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  titulo                String                    @db.VarChar(200)
+  titulo_original       String?                   @db.VarChar(200)
+  sinopsis              String?
+  duracion_minutos      Int
+  clasificacion         ClasificacionPeliculaEnum @default(PG)
+  director              String?                   @db.VarChar(150)
+  reparto               String?
+  pais_origen_id        String?                   @db.Uuid
+  idioma_original       String?                   @default("Español") @db.VarChar(50)
+  subtitulos            String?                   @db.VarChar(200)
+  poster_url            String?                   @db.VarChar(500)
+  trailer_url           String?                   @db.VarChar(500)
+  calificacion_imdb     Decimal?                  @db.Decimal(3, 1)
+  fecha_estreno_mundial DateTime?                 @db.Date
+  fecha_estreno_local   DateTime?                 @db.Date
+  presupuesto           Decimal?                  @db.Decimal(12, 2)
+  recaudacion           Decimal?                  @db.Decimal(15, 2)
+  activa                Boolean?                  @default(true)
+  destacada             Boolean?                  @default(false)
+  fecha_creacion        DateTime?                 @default(now()) @db.Timestamp(6)
+  fecha_actualizacion   DateTime?                 @default(now()) @updatedAt @db.Timestamp(6)
+
+  // Relaciones
+  pais                  paises?                   @relation(fields: [pais_origen_id], references: [id])
+  peliculas_generos     peliculas_generos[]
+  funciones             funciones[]
+
+  @@map("peliculas")
+}
+
+model peliculas_generos {
+  pelicula_id String @db.Uuid
+  genero_id   String @db.Uuid
+
+  // Relaciones
+  pelicula peliculas @relation(fields: [pelicula_id], references: [id])
+  genero   generos   @relation(fields: [genero_id], references: [id])
+
+  @@id([pelicula_id, genero_id])
+  @@map("peliculas_generos")
+}
+
+// ============================================
+// 🏢 MÓDULO DE SALAS Y ASIENTOS
+// ============================================
+
+model salas {
+  id                  String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  numero              Int          @unique
+  nombre              String       @db.VarChar(100)
+  tipo_sala           TipoSalaEnum @default(standard)
+  capacidad_total     Int
+  filas               Int
+  asientos_por_fila   Int
+  precio_extra        Decimal?     @default(0.00) @db.Decimal(6, 2)
+  activa              Boolean?     @default(true)
+  equipamiento        Json?        @default("{}")
+  notas               String?
+  fecha_creacion      DateTime?    @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?    @default(now()) @updatedAt @db.Timestamp(6)
+
+  // Relaciones
+  asientos  asientos[]
+  funciones funciones[]
+
+  @@map("salas")
+}
+
+model asientos {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sala_id      String   @db.Uuid
+  fila         String   @db.Char(1)
+  numero       Int
+  codigo       String?  @default(dbgenerated("((fila)::text || numero)")) @db.VarChar(5)
+  es_vip       Boolean? @default(false)
+  habilitado   Boolean? @default(true)
+  precio_extra Decimal? @default(0.00) @db.Decimal(6, 2)
+
+  // Relaciones
+  sala               salas                @relation(fields: [sala_id], references: [id])
+  reservas_asientos  reservas_asientos[]
+
+  @@unique([sala_id, fila, numero])
+  @@unique([sala_id, codigo])
+  @@map("asientos")
+}
+
+// ============================================
+// 🎫 MÓDULO DE FUNCIONES
+// ============================================
+
+model funciones {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  pelicula_id          String    @db.Uuid
+  sala_id              String    @db.Uuid
+  fecha_hora_inicio    DateTime  @db.Timestamp(6)
+  fecha_hora_fin       DateTime  @db.Timestamp(6)
+  precio_base          Decimal   @db.Decimal(8, 2)
+  precio_con_descuento Decimal?  @db.Decimal(8, 2)
+  asientos_disponibles Int       @default(0)
+  asientos_reservados  Int?      @default(0)
+  activa               Boolean?  @default(true)
+  especial             Boolean?  @default(false)
+  notas                String?
+  fecha_creacion       DateTime? @default(now()) @db.Timestamp(6)
+  fecha_actualizacion  DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+
+  // Relaciones
+  pelicula peliculas @relation(fields: [pelicula_id], references: [id])
+  sala     salas     @relation(fields: [sala_id], references: [id])
+  reservas reservas[]
+
+  @@map("funciones")
+}
+
+// ============================================
+// 🎟️ MÓDULO DE RESERVAS
+// ============================================
+
+model reservas {
+  id                   String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  codigo_reserva       String            @unique @db.VarChar(15)
+  usuario_id           String            @db.Uuid
+  funcion_id           String            @db.Uuid
+  cantidad_asientos    Int
+  precio_subtotal      Decimal           @db.Decimal(10, 2)
+  descuentos           Decimal?          @default(0.00) @db.Decimal(10, 2)
+  impuestos            Decimal?          @default(0.00) @db.Decimal(10, 2)
+  precio_total         Decimal           @db.Decimal(10, 2)
+  estado               EstadoReservaEnum @default(pendiente)
+  metodo_pago          MetodoPagoEnum?
+  fecha_reserva        DateTime?         @default(now()) @db.Timestamp(6)
+  fecha_vencimiento    DateTime?         @db.Timestamp(6)
+  fecha_pago           DateTime?         @db.Timestamp(6)
+  empleado_vendedor_id String?           @db.Uuid
+  notas                String?
+  fecha_creacion       DateTime?         @default(now()) @db.Timestamp(6)
+  fecha_actualizacion  DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
+
+  // Relaciones
+  usuario           usuarios            @relation(fields: [usuario_id], references: [id])
+  funcion           funciones           @relation(fields: [funcion_id], references: [id])
+  reservas_asientos reservas_asientos[]
+
+  @@map("reservas")
+}
+
+model reservas_asientos {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reserva_id       String    @db.Uuid
+  asiento_id       String    @db.Uuid
+  precio_pagado    Decimal   @db.Decimal(8, 2)
+  fecha_asignacion DateTime? @default(now()) @db.Timestamp(6)
+
+  // Relaciones
+  reserva reservas  @relation(fields: [reserva_id], references: [id])
+  asiento asientos @relation(fields: [asiento_id], references: [id])
+
+  @@unique([reserva_id, asiento_id])
+  @@unique([asiento_id, reserva_id])
+  @@map("reservas_asientos")
+}
+
+// ============================================
+// 📊 MÓDULO DE PROMOCIONES
+// ============================================
+
+model promociones {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  codigo             String    @unique @db.VarChar(20)
+  nombre             String    @db.VarChar(100)
+  descripcion        String?
+  tipo_descuento     String    @db.VarChar(20)
+  valor_descuento    Decimal   @db.Decimal(8, 2)
+  fecha_inicio       DateTime  @db.Date
+  fecha_fin          DateTime  @db.Date
+  uso_maximo         Int?      @default(1)
+  uso_actual         Int?      @default(0)
+  activa             Boolean?  @default(true)
+  aplica_dias_semana Int[]     @default([1, 2, 3, 4, 5, 6, 7])
+  fecha_creacion     DateTime? @default(now()) @db.Timestamp(6)
+
+  @@map("promociones")
+}
+
+// ============================================
+// 📝 MÓDULO DE AUDITORÍA
+// ============================================
+
+model auditoria_logs {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  usuario_id       String?   @db.Uuid
+  tabla_afectada   String    @db.VarChar(50)
+  accion           String    @db.VarChar(50)
+  registro_id      String?   @db.VarChar(100)
+  datos_anteriores Json?
+  datos_nuevos     Json?
+  ip_address       String?   @db.Inet
+  user_agent       String?
+  detalles         String?
+  modulo           String?   @db.VarChar(50)
+  fecha_creacion   DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([accion], map: "idx_auditoria_accion")
+  @@index([fecha_creacion], map: "idx_auditoria_fecha")
+  @@index([tabla_afectada], map: "idx_auditoria_tabla")
+  @@index([usuario_id], map: "idx_auditoria_usuario")
+  @@map("auditoria_logs")
+}
+
+// ============================================
+// ⚙️ CONFIGURACIONES DEL SISTEMA
+// ============================================
+
+model configuraciones {
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  clave               String    @unique @db.VarChar(100)
+  valor               String
+  descripcion         String?
+  categoria           String?   @default("general") @db.VarChar(50)
+  tipo_dato           String?   @default("string") @db.VarChar(20)
+  es_publica          Boolean?  @default(false)
+  modificable         Boolean?  @default(true)
+  fecha_creacion      DateTime? @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@map("configuraciones")
+}
